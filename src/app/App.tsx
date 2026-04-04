@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { AccessibilityWidget } from './components/AccessibilityWidget';
+import { SessionsProvider } from './context/SessionsContext';
 import Login from './pages/Login';
 import Inicio from './pages/Inicio';
 import HistoryChats from './pages/HistoryChats';
@@ -48,11 +49,13 @@ function AppLayout() {
 export default function App() {
   return (
     <HashRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/*" element={<AppLayout />} />
-      </Routes>
-      <AccessibilityWidget />
+      <SessionsProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/*" element={<AppLayout />} />
+        </Routes>
+        <AccessibilityWidget />
+      </SessionsProvider>
     </HashRouter>
   );
 }

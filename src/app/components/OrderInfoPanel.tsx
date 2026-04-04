@@ -69,11 +69,12 @@ function lerp(a: [number,number], b: [number,number], t: number): [number,number
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
 
-// Punto de inicio del rider (alejado del local)
-const RIDER_START: [number,number] = [-12.0820, -77.0180];
-const LOCAL_COORDS: [number,number]  = [-12.0924, -77.0224];
-const CLIENT_COORDS: [number,number] = [-12.1100, -77.0450];
-const NEAR_DROPOFF: [number,number]  = [-12.1060, -77.0410];
+// Coordenadas reales Lima — rider sale de Miraflores hacia PhoneCorp San Isidro
+// y luego entrega en Av. Javier Prado Este 4200, Surco
+const RIDER_START: [number,number]  = [-12.1190, -77.0286]; // Miraflores (inicio rider)
+const LOCAL_COORDS: [number,number] = [-12.0973, -77.0325]; // San Isidro (PhoneCorp)
+const CLIENT_COORDS: [number,number]= [-12.1021, -77.0066]; // Av. Javier Prado Este 4200, Surco
+const NEAR_DROPOFF: [number,number] = [-12.1000, -77.0120]; // Cerca al dropoff
 
 function getRiderPos(phase: RiderPhase, t: number): [number,number] {
   switch (phase) {
@@ -87,7 +88,7 @@ function getRiderPos(phase: RiderPhase, t: number): [number,number] {
 }
 
 // ---- Hook global de simulación ----
-export function useRiderSimulation(): RiderSimState {
+export function useRiderSimulation(cancelled = false): RiderSimState {
   const [phaseIdx, setPhaseIdx] = useState(1); // Empieza en 'at_local'
   const [elapsed, setElapsed] = useState(0);
 
@@ -96,6 +97,8 @@ export function useRiderSimulation(): RiderSimState {
 
   useEffect(() => {
     if (phase === 'delivered') return;
+    // Orden cancelada: el rider se queda en el local, no avanza hacia el cliente
+    if (cancelled) return;
     const interval = setInterval(() => {
       setElapsed(prev => {
         const next = prev + 1;
@@ -107,7 +110,7 @@ export function useRiderSimulation(): RiderSimState {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [phaseIdx, duration, phase]);
+  }, [phaseIdx, duration, phase, cancelled]);
 
   const t = duration > 0 ? elapsed / duration : 1;
   const riderPos = getRiderPos(phase, t);
@@ -135,6 +138,38 @@ export function useRiderSimulation(): RiderSimState {
   };
 }
 
+// Devuelve el punto (lat, lng) en la fracción t (0-1) a lo largo de una polilínea
+function getPointAtFraction(coords: [number, number][], t: number): [number, number] {
+  if (!coords.length) return [0, 0];
+  if (t <= 0) return coords[0];
+  if (t >= 1) return coords[coords.length - 1];
+
+  let totalLen = 0;
+  const segLens: number[] = [];
+  for (let i = 1; i < coords.length; i++) {
+    const dlat = coords[i][0] - coords[i - 1][0];
+    const dlng = coords[i][1] - coords[i - 1][1];
+    const d = Math.sqrt(dlat * dlat + dlng * dlng);
+    segLens.push(d);
+    totalLen += d;
+  }
+  if (totalLen === 0) return coords[0];
+
+  const target = t * totalLen;
+  let acc = 0;
+  for (let i = 0; i < segLens.length; i++) {
+    if (acc + segLens[i] >= target) {
+      const st = segLens[i] > 0 ? (target - acc) / segLens[i] : 0;
+      return [
+        coords[i][0] + (coords[i + 1][0] - coords[i][0]) * st,
+        coords[i][1] + (coords[i + 1][1] - coords[i][1]) * st,
+      ];
+    }
+    acc += segLens[i];
+  }
+  return coords[coords.length - 1];
+}
+
 // ---- Leaflet map con marcadores SVG y ruta OSRM ----
 interface InteractiveMapProps {
   expanded?: boolean;
@@ -149,6 +184,8 @@ interface InteractiveMapProps {
   liveRiderPos?: [number, number];
   riderPhase?: RiderPhase;
   minutesLeft?: number;
+  cancelledOrder?: boolean;
+  progress?: number; // 0-1 a lo largo de la ruta real
 }
 
 // SVG strings para los iconos de cada marcador
@@ -209,23 +246,39 @@ function InteractiveMap({
   liveRiderPos,
   riderPhase = 'at_local',
   minutesLeft = 8,
+  cancelledOrder = false,
+  progress = 0,
 }: InteractiveMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const riderMarkerRef = useRef<any>(null);
+  // Almacena los puntos reales de la ruta OSRM para mover al rider sobre ellos
+  const routeCoordsRef = useRef<[number, number][]>([]);
+  // Ref de progreso para accederlo dentro de callbacks asíncronos sin stale closure
+  const progressRef = useRef(progress);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
-  // Animate rider marker when liveRiderPos changes
+  // Mantiene progressRef sincronizado
+  useEffect(() => { progressRef.current = progress; }, [progress]);
+
+  // Mueve al rider a lo largo de la ruta real según el progreso de la simulación
   useEffect(() => {
-    if (riderMarkerRef.current && liveRiderPos) {
-      riderMarkerRef.current.setLatLng(liveRiderPos);
-      const label = PHASE_LABELS[riderPhase] ?? 'Rider en ruta';
-      const mins = minutesLeft > 0 ? `~${minutesLeft} min al destino` : 'Llegó al destino';
-      riderMarkerRef.current.setPopupContent(
-        `<b style="font-size:.88rem">${label}</b><br><span style="font-size:.78rem;color:#6b7280">${mins}</span>`
-      );
-    }
-  }, [liveRiderPos, riderPhase, minutesLeft]);
+    if (!riderMarkerRef.current || !routeCoordsRef.current.length) return;
+    const pos = getPointAtFraction(routeCoordsRef.current, progress);
+    riderMarkerRef.current.setLatLng(pos);
+  }, [progress]);
+
+  // Actualiza solo el popup cuando cambia la fase o el tiempo restante
+  useEffect(() => {
+    if (!riderMarkerRef.current) return;
+    const label = cancelledOrder ? 'Rider en el local' : (PHASE_LABELS[riderPhase] ?? 'Rider en ruta');
+    const detail = cancelledOrder
+      ? 'Orden cancelada — no va al cliente'
+      : (minutesLeft > 0 ? `~${minutesLeft} min al destino` : 'Llegó al destino');
+    riderMarkerRef.current.setPopupContent(
+      `<b style="font-size:.88rem">${label}</b><br><span style="font-size:.78rem;color:${cancelledOrder ? '#ef4444' : '#6b7280'}">${detail}</span>`
+    );
+  }, [riderPhase, minutesLeft, cancelledOrder]);
 
   useEffect(() => {
     // Inyectar animación de pulso
@@ -267,20 +320,30 @@ function InteractiveMap({
         link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
         document.head.appendChild(link);
       }
-      await new Promise<void>((resolve, reject) => {
+      // Leaflet y LRM ya cargados desde index.html — solo esperamos que estén listos
+      await new Promise<void>((resolve) => {
         if ((window as any).L) { resolve(); return; }
-        const s = document.createElement('script');
-        s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        s.onload = () => resolve();
-        s.onerror = reject;
-        document.head.appendChild(s);
+        // Fallback: esperar hasta 3s por si el script del index.html aún no terminó
+        let attempts = 0;
+        const check = setInterval(() => {
+          attempts++;
+          if ((window as any).L || attempts > 30) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 100);
       });
 
       const Lf = (window as any).L;
-      const initialRider = liveRiderPos ?? LOCAL_COORDS;
+      // Orden cancelada: rider fijo en el local (no va al cliente)
+      const initialRider = cancelledOrder ? LOCAL_COORDS : (liveRiderPos ?? LOCAL_COORDS);
 
-      const centerLat = (localCoords[0] + clientCoords[0]) / 2;
-      const centerLng = (localCoords[1] + clientCoords[1]) / 2;
+      const centerLat = cancelledOrder
+        ? (RIDER_START[0] + localCoords[0]) / 2
+        : (localCoords[0] + clientCoords[0]) / 2;
+      const centerLng = cancelledOrder
+        ? (RIDER_START[1] + localCoords[1]) / 2
+        : (localCoords[1] + clientCoords[1]) / 2;
 
       const map = Lf.map(container, {
         center: [centerLat, centerLng],
@@ -311,50 +374,153 @@ function InteractiveMap({
         .addTo(map)
         .bindPopup(`<b style="font-size:.88rem">${localName}</b><br><span style="font-size:.78rem;color:#6b7280">${pickupAddress.split(',').slice(0,2).join(',')}</span>`, popupOpts);
 
-      const riderMarker = Lf.marker(initialRider, { icon: makeIcon('#0F2C32', ICON_RIDER_SVG, true), zIndexOffset: 1000 })
+      // Rider: sin pulso cuando está cancelado (ya está en el local)
+      const riderPopupText = cancelledOrder
+        ? `<b style="font-size:.88rem">Rider en el local</b><br><span style="font-size:.78rem;color:#ef4444">Orden cancelada — no va al cliente</span>`
+        : `<b style="font-size:.88rem">Rider en ruta</b><br><span style="font-size:.78rem;color:#6b7280">~${minutesLeft} min al destino</span>`;
+      const riderMarker = Lf.marker(initialRider, {
+        icon: makeIcon(cancelledOrder ? '#6b7280' : '#0F2C32', ICON_RIDER_SVG, !cancelledOrder),
+        zIndexOffset: 1000,
+      })
         .addTo(map)
-        .bindPopup(`<b style="font-size:.88rem">Rider en ruta</b><br><span style="font-size:.78rem;color:#6b7280">~${minutesLeft} min al destino</span>`, popupOpts);
+        .bindPopup(riderPopupText, popupOpts);
       riderMarkerRef.current = riderMarker;
 
       let finalClientCoords = clientCoords;
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(deliveryAddress + ', Lima, Perú')}&format=json&limit=1`,
-          { headers: { 'Accept-Language': 'es' } }
-        );
-        const geo = await res.json();
-        if (geo?.[0]) {
-          finalClientCoords = [parseFloat(geo[0].lat), parseFloat(geo[0].lon)];
-        }
-      } catch (_) {}
+      if (!cancelledOrder) {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(deliveryAddress + ', Lima, Perú')}&format=json&limit=1`,
+            { headers: { 'Accept-Language': 'es' } }
+          );
+          const geo = await res.json();
+          if (geo?.[0]) {
+            finalClientCoords = [parseFloat(geo[0].lat), parseFloat(geo[0].lon)];
+          }
+        } catch (_) {}
+      }
 
-      const clientMarker = Lf.marker(finalClientCoords, { icon: makeIcon('#3b82f6', ICON_CLIENT_SVG, true) })
+      // Marcador cliente: gris con "Entrega cancelada" si la orden está cancelada
+      Lf.marker(finalClientCoords, {
+        icon: makeIcon(cancelledOrder ? '#9ca3af' : '#3b82f6', ICON_CLIENT_SVG, !cancelledOrder),
+        opacity: cancelledOrder ? 0.55 : 1,
+      })
         .addTo(map)
-        .bindPopup(`<b style="font-size:.88rem">${clienteName}</b><br><span style="font-size:.78rem;color:#6b7280">${deliveryAddress.split(',').slice(0,2).join(',')}</span>`, popupOpts);
+        .bindPopup(
+          cancelledOrder
+            ? `<b style="font-size:.88rem;color:#ef4444">Entrega cancelada</b><br><span style="font-size:.78rem;color:#6b7280">${clienteName} — ${deliveryAddress.split(',')[0]}</span>`
+            : `<b style="font-size:.88rem">${clienteName}</b><br><span style="font-size:.78rem;color:#6b7280">${deliveryAddress.split(',').slice(0,2).join(',')}</span>`,
+          popupOpts
+        );
 
-      // Trazar ruta
-      const drawRoute = (lCoords: [number,number], rCoords: [number,number], cCoords: [number,number]) => {
-        const wps = [lCoords, rCoords, cCoords].map(c => `${c[1]},${c[0]}`).join(';');
-        fetch(`https://router.project-osrm.org/route/v1/driving/${wps}?overview=full&geometries=geojson`)
-          .then(r => r.json())
-          .then(data => {
-            const coords = data?.routes?.[0]?.geometry?.coordinates;
-            if (!coords?.length) throw new Error();
-            const ll = coords.map((c: number[]) => [c[1], c[0]]);
-            const mid = Math.floor(ll.length / 2);
-            Lf.polyline(ll.slice(0, mid), { color: '#e11d48', weight: 3.5, opacity: 0.85, dashArray: '9,5' }).addTo(map);
-            Lf.polyline(ll.slice(mid),    { color: '#3b82f6', weight: 3.5, opacity: 0.85, dashArray: '9,5' }).addTo(map);
-          })
-          .catch(() => {
-            Lf.polyline([lCoords, rCoords], { color: '#e11d48', weight: 3, opacity: 0.75, dashArray: '8,5' }).addTo(map);
-            Lf.polyline([rCoords, cCoords], { color: '#3b82f6', weight: 3, opacity: 0.75, dashArray: '8,5' }).addTo(map);
-          });
+      // ── Helpers de dibujo ─────────────────────────────────────────
+      const drawRoute = (coords: [number,number][], color: string, w = 5) => {
+        if (!mapInstanceRef.current) return;
+        Lf.polyline(coords, { color: '#000',    weight: w + 5, opacity: 0.15, lineJoin: 'round', lineCap: 'round' }).addTo(map);
+        Lf.polyline(coords, { color: '#ffffff', weight: w + 1, opacity: 0.5,  lineJoin: 'round', lineCap: 'round' }).addTo(map);
+        Lf.polyline(coords, { color,            weight: w,     opacity: 0.95, lineJoin: 'round', lineCap: 'round' }).addTo(map);
       };
 
-      drawRoute(RIDER_START, localCoords, finalClientCoords);
-      map.fitBounds(
-        Lf.latLngBounds([RIDER_START, localCoords, finalClientCoords]).pad(0.2)
-      );
+      const updateRiderOnRoute = (ll: [number,number][]) => {
+        routeCoordsRef.current = ll;
+        if (riderMarkerRef.current && mapInstanceRef.current) {
+          riderMarkerRef.current.setLatLng(getPointAtFraction(ll, progressRef.current));
+        }
+      };
+
+      // ── Routing via L.Routing.control (igual que postventa.html que funciona) ──
+      // LRM usa OSRM internamente, maneja CORS correctamente desde el browser
+      const routeSegment = (
+        from: [number,number],
+        to:   [number,number],
+        color: string,
+        w = 5
+      ): Promise<[number,number][]> =>
+        new Promise((resolve) => {
+          const Routing = (Lf as any).Routing;
+          if (!Routing) {
+            // LRM no disponible: línea recta provisional
+            Lf.polyline([from, to], { color, weight: w, opacity: 0.5, dashArray: '6,4' }).addTo(map);
+            resolve([from, to]);
+            return;
+          }
+
+          const ctrl = Routing.control({
+            waypoints: [
+              Lf.latLng(from[0], from[1]),
+              Lf.latLng(to[0],   to[1]),
+            ],
+            routeWhileDragging: false,
+            addWaypoints:       false,
+            show:               false,
+            fitSelectedRoutes:  false,
+            createMarker:       () => null,
+            lineOptions: {
+              styles: [],                    // desactivamos el estilo default de LRM
+              extendToWaypoints:      false,
+              missingRouteTolerance:  0,
+            },
+          });
+
+          let resolved = false;
+
+          ctrl.on('routesfound', (e: any) => {
+            if (resolved) return;
+            resolved = true;
+            try { (map as any).removeControl(ctrl); } catch (_) {}
+            const pts: [number,number][] = e.routes[0].coordinates.map(
+              (p: any) => [p.lat, p.lng] as [number,number]
+            );
+            if (mapInstanceRef.current) drawRoute(pts, color, w);
+            resolve(pts);
+          });
+
+          ctrl.on('routingerror', () => {
+            if (resolved) return;
+            resolved = true;
+            try { (map as any).removeControl(ctrl); } catch (_) {}
+            // Fallback visual: línea recta punteada
+            if (mapInstanceRef.current) {
+              Lf.polyline([from, to], { color, weight: w, opacity: 0.6, dashArray: '6,4' }).addTo(map);
+            }
+            resolve([from, to]);
+          });
+
+          // Timeout 10s
+          setTimeout(() => {
+            if (resolved) return;
+            resolved = true;
+            try { (map as any).removeControl(ctrl); } catch (_) {}
+            if (mapInstanceRef.current) {
+              Lf.polyline([from, to], { color, weight: w, opacity: 0.6, dashArray: '6,4' }).addTo(map);
+            }
+            resolve([from, to]);
+          }, 10000);
+
+          ctrl.addTo(map);
+        });
+
+      // ── Dibujar rutas ───────────────────────────────────────────────
+      setStatus('ready');
+      setTimeout(() => map.invalidateSize(), 150);
+
+      if (cancelledOrder) {
+        map.fitBounds(Lf.latLngBounds([RIDER_START, localCoords]).pad(0.3));
+        routeSegment(RIDER_START, localCoords, '#9ca3af', 4).then(coords => {
+          if (!mapInstanceRef.current) return;
+          updateRiderOnRoute(coords);
+        });
+      } else {
+        map.fitBounds(Lf.latLngBounds([RIDER_START, localCoords, finalClientCoords]).pad(0.2));
+        // Ambos segmentos en secuencia para que LRM no colisione
+        routeSegment(RIDER_START, localCoords, '#e11d48', 5).then(seg1 => {
+          if (!mapInstanceRef.current) return;
+          routeSegment(localCoords, finalClientCoords, '#3b82f6', 5).then(seg2 => {
+            if (!mapInstanceRef.current) return;
+            updateRiderOnRoute([...seg1, ...seg2]);
+          });
+        });
+      }
       setStatus('ready');
       setTimeout(() => map.invalidateSize(), 150);
     };
@@ -366,9 +532,10 @@ function InteractiveMap({
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
         riderMarkerRef.current = null;
+        routeCoordsRef.current = [];
       }
     };
-  }, [deliveryAddress]);
+  }, [deliveryAddress, cancelledOrder]);
 
   return (
     <div className="relative w-full h-full bg-gray-100">
@@ -454,7 +621,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 // ---- TAB: Ticket ----
-function TabTicket({ onMapExpand }: { onMapExpand: () => void }) {
+function TabTicket({ onMapExpand, isCancelled }: { onMapExpand: () => void; isCancelled: boolean }) {
   return (
     <div className="space-y-3 p-4">
       {/* Estado de la orden */}
@@ -516,26 +683,43 @@ function TabTicket({ onMapExpand }: { onMapExpand: () => void }) {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Navigation size={14} className="text-[#0F2C32]" />
+            <Navigation size={14} className={isCancelled ? 'text-gray-400' : 'text-[#0F2C32]'} />
             <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Ubicación del Rider</span>
           </div>
-          <span className="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-600 text-xs font-medium rounded-full border border-green-100">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
-            En vivo
-          </span>
+          {isCancelled ? (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-500 text-xs font-medium rounded-full border border-red-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />
+              En el local
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-600 text-xs font-medium rounded-full border border-green-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
+              En vivo
+            </span>
+          )}
         </div>
         <div className="px-4 py-3 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-800">PhoneCorp San Isidro</p>
-            <p className="text-xs text-gray-500 mt-0.5">Android · En ruta · 2.5 km</p>
+            {isCancelled ? (
+              <p className="text-xs text-red-500 mt-0.5 font-medium">Rider retornó al local — entrega cancelada</p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-0.5">Android · En ruta · 2.5 km</p>
+            )}
           </div>
-          <span className="text-xs font-semibold text-[#0F2C32] bg-[#0F2C32]/8 px-2.5 py-1.5 rounded-lg flex items-center gap-1">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" className="inline-block flex-shrink-0">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/>
-              <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-            8 min
-          </span>
+          {isCancelled ? (
+            <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1.5 rounded-lg">
+              En local
+            </span>
+          ) : (
+            <span className="text-xs font-semibold text-[#0F2C32] bg-[#0F2C32]/8 px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" className="inline-block flex-shrink-0">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/>
+                <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              8 min
+            </span>
+          )}
         </div>
         <div className="px-4 pb-3">
           <p className="text-xs text-gray-400 flex items-center gap-1">
@@ -736,14 +920,14 @@ function ModalRechazarOrden({ onClose }: { onClose: () => void }) {
 }
 
 // ---- TAB: Órdenes ----
-function TabOrdenes() {
+function TabOrdenes({ isCancelled }: { isCancelled: boolean }) {
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
   const [pickupExpanded, setPickupExpanded] = useState(false);
   const [showCambiarDireccion, setShowCambiarDireccion] = useState(false);
   const [showRechazarOrden, setShowRechazarOrden] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('Av. Javier Prado Este 4200, Piso 3, Surco, Lima, Perú');
-  const rider = useRiderSimulation();
+  const rider = useRiderSimulation(isCancelled);
 
   const pickupAddress = 'PhoneCorp – Av. Innovación Tecnológica N.º 123, San Isidro, Lima, Perú';
 
@@ -891,12 +1075,25 @@ function TabOrdenes() {
 
         {/* Botones Rechazar Orden / Compensaciones */}
         <div className="px-4 pb-3 flex items-center gap-2 border-t border-gray-100 pt-3">
-          <button
-            onClick={() => setShowRechazarOrden(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors">
-            <XCircle size={13} />
-            Rechazar Orden
-          </button>
+          <div className="relative group">
+            <button
+              onClick={() => !isCancelled && setShowRechazarOrden(true)}
+              disabled={isCancelled}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                isCancelled
+                  ? 'text-gray-300 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
+                  : 'text-red-600 bg-red-50 hover:bg-red-100 border-red-200'
+              }`}
+            >
+              <XCircle size={13} />
+              Rechazar Orden
+            </button>
+            {isCancelled && (
+              <div className="absolute bottom-full left-0 mb-1.5 px-2 py-1 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                La orden ya está cancelada
+              </div>
+            )}
+          </div>
           <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">
             <Gift size={13} />
             Compensaciones
@@ -928,15 +1125,31 @@ function TabOrdenes() {
 
         {deliveryExpanded && (
           <>
+            {/* Banner de orden cancelada */}
+            {isCancelled && (
+              <div className="px-4 py-2.5 flex items-center gap-2 bg-red-50 border-b border-red-100">
+                <AlertCircle size={13} className="text-red-500 flex-shrink-0" />
+                <p className="text-xs text-red-600 font-medium">
+                  Orden cancelada — el rider permanece en el local y no realizará la entrega al cliente.
+                </p>
+              </div>
+            )}
+
             {/* Botones cambiar dirección / horario */}
             <div className="px-4 py-2.5 flex items-center gap-2 bg-gray-50 border-b border-gray-100">
               <button
-                onClick={() => setShowCambiarDireccion(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0F2C32] bg-white hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors">
+                onClick={() => !isCancelled && setShowCambiarDireccion(true)}
+                disabled={isCancelled}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                  isCancelled
+                    ? 'text-gray-300 bg-white border-gray-200 cursor-not-allowed opacity-60'
+                    : 'text-[#0F2C32] bg-white hover:bg-gray-100 border-gray-200'
+                }`}
+              >
                 <MapPin size={11} />
                 Cambiar dirección
               </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-white rounded-lg border border-gray-200 cursor-not-allowed opacity-60">
+              <button disabled className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-white rounded-lg border border-gray-200 cursor-not-allowed opacity-60">
                 <Clock size={11} />
                 Cambiar Horario de Entrega
               </button>
@@ -983,9 +1196,10 @@ function TabOrdenes() {
                   pickupAddress={pickupAddress}
                   clienteName="Verónica Sosa"
                   localName="PhoneCorp San Isidro"
-                  liveRiderPos={rider.riderPos}
                   riderPhase={rider.phase}
                   minutesLeft={rider.minutesLeft}
+                  cancelledOrder={isCancelled}
+                  progress={isCancelled ? 1 : rider.progress}
                 />
                 {/* Botón fullscreen */}
                 <button
@@ -1307,10 +1521,11 @@ function TabActividad() {
 }
 
 // ---- Panel principal ----
-export function OrderInfoPanel() {
+export function OrderInfoPanel({ orderCancelled = false }: { orderCancelled?: boolean }) {
   const [mapExpanded, setMapExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('ticket');
-  const rider = useRiderSimulation();
+  const isCancelled = orderCancelled;
+  const rider = useRiderSimulation(isCancelled);
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'ticket', label: 'Ticket', icon: <MessageSquare size={13} /> },
@@ -1452,8 +1667,8 @@ export function OrderInfoPanel() {
 
         {/* Contenido del tab activo */}
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'ticket' && <TabTicket onMapExpand={() => setMapExpanded(true)} />}
-          {activeTab === 'ordenes' && <TabOrdenes />}
+          {activeTab === 'ticket' && <TabTicket onMapExpand={() => setMapExpanded(true)} isCancelled={isCancelled} />}
+          {activeTab === 'ordenes' && <TabOrdenes isCancelled={isCancelled} />}
           {activeTab === 'cliente' && <TabCliente />}
           {activeTab === 'actividad' && <TabActividad />}
         </div>

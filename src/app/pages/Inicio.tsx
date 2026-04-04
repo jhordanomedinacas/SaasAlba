@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { TrendingUp, Users, BarChart2, CheckSquare, ArrowRight, Search, X } from 'lucide-react';
+import NewSessionModal from '../components/NewSessionModal';
 
 type DifficultyLevel = 'alto' | 'medio' | 'bajo';
 type SessionStatus   = 'completado' | 'incompleto' | 'en curso';
@@ -83,6 +84,7 @@ export default function Inicio() {
   const [dateTo,         setDateTo]         = useState('');
   const [profileFilter,  setProfileFilter]  = useState('Todos');
   const [agentSearch,    setAgentSearch]    = useState('');
+  const [modalOpen,      setModalOpen]      = useState(false);
 
   const today = new Date().toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -110,6 +112,8 @@ export default function Inicio() {
   };
 
   return (
+    <>
+    <NewSessionModal open={modalOpen} onClose={() => setModalOpen(false)} />
     <div className="flex-1 flex flex-col h-full bg-slate-50 overflow-y-auto">
 
       {/* Header */}
@@ -119,7 +123,10 @@ export default function Inicio() {
             <h2 className="text-base md:text-lg font-semibold text-[#0F2C32]">Panel Entrenador</h2>
             <p className="text-xs text-slate-400 mt-0.5">{capitalizedDate}</p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-[#0F2C32] text-white rounded-lg hover:bg-[#1a4a52] transition-colors whitespace-nowrap">
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-[#0F2C32] text-white rounded-lg hover:bg-[#1a4a52] transition-colors whitespace-nowrap"
+          >
             + Nueva Simulación
           </button>
         </div>
@@ -324,6 +331,7 @@ export default function Inicio() {
 
       </div>
     </div>
+    </>
   );
 }
 

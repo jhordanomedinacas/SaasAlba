@@ -1,5 +1,6 @@
-import { Send, Info } from 'lucide-react';
+import { Send, Info, CheckCircle, Lock, ArrowLeft } from 'lucide-react';
 import { useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router';
 import { OrderInfoPanel } from './OrderInfoPanel';
 
 interface Message {
@@ -9,7 +10,16 @@ interface Message {
   time: string;
 }
 
-export function ChatTraining() {
+interface ChatTrainingProps {
+  profileName: string;
+  level: string;
+  isCompleted: boolean;
+  orderCancelled: boolean;
+  onComplete: () => void;
+}
+
+export function ChatTraining({ profileName, level, isCompleted, orderCancelled, onComplete }: ChatTrainingProps) {
+  const navigate = useNavigate();
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
   const [panelWidth, setPanelWidth] = useState(420);
   const isResizing = useRef(false);
@@ -37,6 +47,7 @@ export function ChatTraining() {
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   }, [panelWidth]);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -53,9 +64,10 @@ export function ChatTraining() {
   ]);
 
   const [inputText, setInputText] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const handleSend = () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isCompleted) return;
 
     const newMessage: Message = {
       id: Date.now().toString(),
@@ -64,41 +76,67 @@ export function ChatTraining() {
       time: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
     };
 
-    setMessages([...messages, newMessage]);
+    setMessages(prev => [...prev, newMessage]);
     setInputText('');
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
   };
 
   const quickReplies = [
     '¿Puedes proporcionarme el número de tu orden?',
-    'Entiendo tu situación, permíteme ayudarte.',
+    'Entiendo tu situación, permítame ayudarte.',
     'Voy a revisar tu caso inmediatamente.'
   ];
 
-  const handleQuickReply = (reply: string) => {
-    setInputText(reply);
-  };
-
   return (
     <div className="flex-1 flex h-full bg-gray-50 relative">
-      <div className="flex-1 flex flex-col w-full">
+      <div className="flex-1 flex flex-col w-full overflow-hidden">
+
         {/* Header */}
-        <div className="bg-white border-b px-4 md:px-6 py-4">
+        <div className="bg-white border-b px-4 md:px-6 py-4 flex-shrink-0">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/historial-chat')}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-[#0F2C32] hover:bg-slate-100 transition-colors"
+                title="Volver al historial"
+              >
+                <ArrowLeft size={18} />
+              </button>
               <div>
-                <h2 className="text-base md:text-lg font-semibold text-gray-900">Práctica de Chat - Escenario de Devolución</h2>
-                <p className="text-xs md:text-sm text-gray-500">Nivel: Intermedio</p>
+                <h2 className="text-base md:text-lg font-semibold text-gray-900">{profileName}</h2>
+                <p className="text-xs md:text-sm text-gray-500">Nivel: {level}</p>
               </div>
             </div>
-            <button
-              onClick={() => setInfoPanelOpen(!infoPanelOpen)}
-              className="flex items-center gap-2 px-3 md:px-4 py-2 text-xs md:text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 whitespace-nowrap"
-            >
-              <Info size={16} />
-              <span className="hidden sm:inline">{infoPanelOpen ? 'Ocultar Info' : 'Ver Info'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {!isCompleted && (
+                <button
+                  onClick={onComplete}
+                  className="flex items-center gap-2 px-3 md:px-4 py-2 text-xs md:text-sm bg-[#0F2C32] text-white rounded-lg hover:bg-[#1a4a52] transition-colors whitespace-nowrap"
+                >
+                  <CheckCircle size={15} />
+                  <span className="hidden sm:inline">Finalizar Sesión</span>
+                </button>
+              )}
+              <button
+                onClick={() => setInfoPanelOpen(!infoPanelOpen)}
+                className="flex items-center gap-2 px-3 md:px-4 py-2 text-xs md:text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 whitespace-nowrap"
+              >
+                <Info size={16} />
+                <span className="hidden sm:inline">{infoPanelOpen ? 'Ocultar Info' : 'Ver Info'}</span>
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Banner de sesión completada */}
+        {isCompleted && (
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-[#0F2C32]/5 border-b border-[#0F2C32]/10 flex-shrink-0">
+            <CheckCircle size={15} className="text-[#0F2C32] flex-shrink-0" />
+            <p className="text-xs font-medium text-[#0F2C32]">
+              Esta sesión ha finalizado. El historial es de solo lectura.
+            </p>
+          </div>
+        )}
 
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto p-3 md:p-6 space-y-3 md:space-y-4">
@@ -123,52 +161,58 @@ export function ChatTraining() {
               </div>
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
-        <div className="bg-white border-t p-3 md:p-4">
-          {/* Quick Replies */}
-          <div className="flex flex-wrap gap-2 mb-3 overflow-x-auto">
-            {quickReplies.map((reply, index) => (
-              <button
-                key={index}
-                onClick={() => handleQuickReply(reply)}
-                className="px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-colors whitespace-nowrap flex-shrink-0"
-              >
-                {reply}
-              </button>
-            ))}
+        {isCompleted ? (
+          <div className="bg-white border-t p-3 md:p-4 flex items-center justify-center gap-2 text-slate-400">
+            <Lock size={14} />
+            <span className="text-xs font-medium">Sesión completada — escritura deshabilitada</span>
           </div>
+        ) : (
+          <div className="bg-white border-t p-3 md:p-4 flex-shrink-0">
+            {/* Quick Replies */}
+            <div className="flex flex-wrap gap-2 mb-3 overflow-x-auto">
+              {quickReplies.map((reply, index) => (
+                <button
+                  key={index}
+                  onClick={() => setInputText(reply)}
+                  className="px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-colors whitespace-nowrap flex-shrink-0"
+                >
+                  {reply}
+                </button>
+              ))}
+            </div>
 
-          <div className="flex gap-2 md:gap-3">
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Escribe tu respuesta..."
-              className="flex-1 px-3 md:px-4 py-2 md:py-3 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={handleSend}
-              className="px-4 md:px-6 py-2 md:py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
-            >
-              <Send size={16} className="md:w-5 md:h-5" />
-              <span className="hidden sm:inline">Enviar</span>
-            </button>
+            <div className="flex gap-2 md:gap-3">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                placeholder="Escribe tu respuesta..."
+                className="flex-1 px-3 md:px-4 py-2 md:py-3 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleSend}
+                className="px-4 md:px-6 py-2 md:py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
+              >
+                <Send size={16} className="md:w-5 md:h-5" />
+                <span className="hidden sm:inline">Enviar</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Order Info Panel - Desktop: sidebar, Mobile: modal */}
+      {/* Order Info Panel */}
       {infoPanelOpen && (
         <>
-          {/* Overlay para móvil */}
           <div
             className="fixed inset-0 bg-black/50 z-40 md:hidden"
             onClick={() => setInfoPanelOpen(false)}
           />
-          {/* Panel */}
           <div
             className={`
               fixed md:relative
@@ -180,15 +224,13 @@ export function ChatTraining() {
             `}
             style={{ width: panelWidth }}
           >
-            {/* Handle de resize */}
             <div
               onMouseDown={onResizeStart}
               className="hidden md:block absolute left-0 top-0 h-full w-1.5 cursor-col-resize z-10 group hover:bg-blue-400/40 transition-colors"
-              title="Arrastra para redimensionar"
             >
               <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-10 rounded-full bg-gray-300 group-hover:bg-blue-400 transition-colors" />
             </div>
-            <OrderInfoPanel />
+            <OrderInfoPanel orderCancelled={orderCancelled} />
           </div>
         </>
       )}
