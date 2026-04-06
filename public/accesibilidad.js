@@ -196,6 +196,8 @@
   html.acc-zoom-110{zoom:1.1}
   html.acc-zoom-125{zoom:1.25}
   html.acc-zoom-150{zoom:1.5}
+  html.acc-zoom-150 #accPanel{width:min(95vw,640px);max-width:95vw;}
+  html.acc-zoom-150 .acc-grid,html.acc-zoom-150 .acc-grid-2{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
   html.acc-spacing-plus p,html.acc-spacing-plus li,html.acc-spacing-plus td,html.acc-spacing-plus div{margin-bottom:1.3em!important;word-spacing:.16em!important}
   html.acc-ctl *{font-size:var(--acc-font-scale,100%);letter-spacing:var(--acc-letter-spacing,0px);line-height:var(--acc-line-height,normal)}
   #accPanel,#accPanel *{font-size:min(var(--acc-font-scale,100%),120%)!important;letter-spacing:min(var(--acc-letter-spacing,0px),2px)!important;line-height:min(var(--acc-line-height,normal),1.6)!important;}

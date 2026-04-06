@@ -196,7 +196,7 @@ export default function Inicio() {
       <div className="flex-1 p-4 md:p-6 space-y-5">
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-stretch" style={{ gridAutoRows: '1fr' }}>
           {stats.map((stat) => <KpiCard key={stat.label} {...stat} />)}
           <AprobacionCard />
         </div>
@@ -367,15 +367,15 @@ function AprobacionCard() {
   }, []);
 
   return (
-    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col gap-3">
+    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex h-full min-h-full self-stretch flex-col gap-3">
       <div className="flex items-start justify-between">
         <p className="text-xs text-slate-400 mt-1">Tasa de Aprobación</p>
         <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
           <CheckSquare size={15} className="text-slate-400" />
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="relative flex-shrink-0">
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+        <div className="relative flex-shrink-0 mx-auto sm:mx-0">
           <svg width={70} height={70} viewBox="0 0 80 80">
             <circle cx={40} cy={40} r={R} fill="none" stroke="#f1f5f9" strokeWidth={10} />
             <circle
@@ -390,14 +390,14 @@ function AprobacionCard() {
             <span className="text-sm font-bold text-[#0F2C32] tabular-nums">{count}%</span>
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
+        <div className="grid gap-2 w-full min-w-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-[#0F2C32] flex-shrink-0" />
-            <span className="text-xs text-slate-600">Aprobados <span className="font-semibold">{aprobados}%</span></span>
+            <span className="min-w-0 break-words text-xs text-slate-600">Aprobados <span className="font-semibold">{aprobados}%</span></span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-slate-200 flex-shrink-0" />
-            <span className="text-xs text-slate-400">Desaprobados <span className="font-semibold">{desaprobados}%</span></span>
+            <span className="min-w-0 break-words text-xs text-slate-400">Desaprobados <span className="font-semibold">{desaprobados}%</span></span>
           </div>
         </div>
       </div>
@@ -481,7 +481,7 @@ function KpiCard({ numeric, value, label, trend, icon: Icon, bar, sparkline, cha
   const areaPath  = `${linePath} L${AW},${AH} L0,${AH} Z`;
 
   return (
-    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col gap-3">
+    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex h-full min-h-full self-stretch flex-col gap-3">
 
       {/* Top row */}
       <div className="flex items-start justify-between">

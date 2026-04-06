@@ -8,6 +8,7 @@ export default function Login() {
   const navigate  = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef   = useRef<number>(0);
+  const videoRef  = useRef<HTMLVideoElement>(null);
 
   const [role, setRole]         = useState<Role>(null);
   const [email, setEmail]       = useState('');
@@ -19,20 +20,29 @@ export default function Login() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
 
-    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+    const resize = () => {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
     resize();
     window.addEventListener('resize', resize);
 
     const dim = Array.from({ length: 140 }, () => ({
-      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
-      r: Math.random() * 0.8 + 0.2, a: Math.random() * 0.2 + 0.05,
-      sp: Math.random() * 0.01 + 0.003, off: Math.random() * Math.PI * 2,
+      x:   Math.random() * canvas.width,
+      y:   Math.random() * canvas.height,
+      r:   Math.random() * 0.8 + 0.2,
+      a:   Math.random() * 0.15 + 0.04,
+      sp:  Math.random() * 0.01 + 0.003,
+      off: Math.random() * Math.PI * 2,
     }));
 
-    const bright = Array.from({ length: 30 }, () => ({
-      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
-      r: Math.random() * 1.5 + 0.6, a: Math.random() * 0.35 + 0.2,
-      sp: Math.random() * 0.015 + 0.005, off: Math.random() * Math.PI * 2,
+    const bright = Array.from({ length: 25 }, () => ({
+      x:   Math.random() * canvas.width,
+      y:   Math.random() * canvas.height,
+      r:   Math.random() * 1.5 + 0.6,
+      a:   Math.random() * 0.25 + 0.12,
+      sp:  Math.random() * 0.015 + 0.005,
+      off: Math.random() * Math.PI * 2,
     }));
 
     let t = 0;
@@ -41,16 +51,16 @@ export default function Login() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       dim.forEach(s => {
-        const a = Math.min(1, s.a + Math.sin(t * s.sp + s.off) * 0.08);
+        const a = Math.min(1, s.a + Math.sin(t * s.sp + s.off) * 0.06);
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill();
       });
 
       bright.forEach(s => {
-        const a = Math.min(1, s.a + Math.sin(t * s.sp + s.off) * 0.2);
+        const a = Math.min(1, s.a + Math.sin(t * s.sp + s.off) * 0.15);
         const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 5);
-        g.addColorStop(0,   `rgba(255,255,255,${a * 0.5})`);
-        g.addColorStop(1,   'rgba(0,0,0,0)');
+        g.addColorStop(0, `rgba(255,255,255,${a * 0.4})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 5, 0, Math.PI * 2);
         ctx.fillStyle = g; ctx.fill();
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
@@ -60,7 +70,22 @@ export default function Login() {
       t++;
     };
     draw();
-    return () => { cancelAnimationFrame(animRef.current); window.removeEventListener('resize', resize); };
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
+  /* ── Video: una sola vez, se queda en último frame ── */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = true;
+    video.loop  = false;
+    video.play().catch(() => {});
+    const onEnd = () => video.pause();
+    video.addEventListener('ended', onEnd);
+    return () => video.removeEventListener('ended', onEnd);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -69,25 +94,36 @@ export default function Login() {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #0a1f23 0%, #0F2C32 50%, #0d2a2f 100%)' }}>
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
 
-      <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-none" />
+      {/* ── Video de fondo ── */}
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover z-0"
+        src={`${import.meta.env.BASE_URL}VIDEOALBA.mp4`}
+        autoPlay
+        muted
+        playsInline
+        preload="auto"
+      />
 
-      {/* Glow central */}
-      <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center">
-        <div className="w-[600px] h-[600px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse, rgba(255,255,255,0.03) 0%, transparent 70%)' }} />
-      </div>
+      {/* ── Overlay oscuro sobre el video ── */}
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none"
+        style={{ background: 'linear-gradient(135deg, rgba(10,31,35,0.75) 0%, rgba(15,44,50,0.70) 50%, rgba(13,42,47,0.75) 100%)' }}
+      />
 
-      {/* Línea superior */}
+      {/* ── Starfield encima del overlay ── */}
+      <canvas ref={canvasRef} className="absolute inset-0 z-[2] pointer-events-none" />
+
+      {/* ── Línea superior ── */}
       <div className="absolute top-0 left-0 right-0 h-px z-10"
         style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.12), transparent)' }} />
-      {/* Línea inferior */}
+      {/* ── Línea inferior ── */}
       <div className="absolute bottom-0 left-0 right-0 h-px z-10"
         style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent)' }} />
 
-      {/* Card */}
+      {/* ── Contenido ── */}
       <div className="relative z-10 w-full max-w-sm px-6 flex flex-col items-center text-center gap-5 py-12">
 
         {/* Eyebrow */}
@@ -103,8 +139,10 @@ export default function Login() {
         {/* Logo + título */}
         <div className="flex flex-col items-center gap-1">
           <img src={logoAlba} alt="Logo Alba" className="w-20 h-20 object-contain mb-1" />
-          <h1 className="font-black uppercase tracking-[0.08em] text-white leading-none"
-            style={{ fontSize: 'clamp(3rem,9vw,5rem)', textShadow: '0 0 60px rgba(255,255,255,0.10)' }}>
+          <h1
+            className="font-black uppercase tracking-[0.08em] text-white leading-none"
+            style={{ fontSize: 'clamp(3rem,9vw,5rem)', textShadow: '0 0 60px rgba(255,255,255,0.10)' }}
+          >
             ALBA
           </h1>
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/80"
@@ -125,7 +163,7 @@ export default function Login() {
           <div className="flex-1 h-px bg-white/10" />
         </div>
 
-        {/* Roles o formulario */}
+        {/* ── FASE 1: selección de rol ── */}
         {!role ? (
           <>
             <p className="text-white/70 text-xs uppercase tracking-widest" style={{ fontFamily: 'monospace' }}>
@@ -151,19 +189,31 @@ export default function Login() {
                 onClick={() => setRole('asesor')}
               />
             </div>
+
+            {/* Footer dots */}
+            <div className="flex gap-2 mt-1">
+              {[0,1,2].map(i => (
+                <div key={i} className="w-1 h-1 rounded-full bg-white/25" />
+              ))}
+            </div>
           </>
         ) : (
+
+          /* ── FASE 2: formulario ── */
           <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
 
-            {/* Rol activo */}
+            {/* Rol activo + cambiar */}
             <div className="flex items-center justify-between">
               <span className="text-[0.60rem] uppercase tracking-widest text-white/80"
                 style={{ fontFamily: 'monospace' }}>
                 {role === 'entrenador' ? 'Entrenador' : 'Asesor'}
               </span>
-              <button type="button" onClick={() => setRole(null)}
+              <button
+                type="button"
+                onClick={() => setRole(null)}
                 className="text-[0.60rem] uppercase tracking-widest text-white/50 hover:text-white transition-colors"
-                style={{ fontFamily: 'monospace' }}>
+                style={{ fontFamily: 'monospace' }}
+              >
                 cambiar
               </button>
             </div>
@@ -208,10 +258,12 @@ export default function Login() {
   );
 }
 
+/* ── Subcomponentes ── */
 function RoleButton({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
   return (
     <button
-      type="button" onClick={onClick}
+      type="button"
+      onClick={onClick}
       className="relative flex-1 flex flex-col items-center gap-2.5 py-5 transition-all duration-200 hover:-translate-y-0.5"
       style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.20)', color: 'rgba(255,255,255,0.90)' }}
       onMouseEnter={e => { const b = e.currentTarget; b.style.background = 'rgba(255,255,255,0.08)'; b.style.borderColor = 'rgba(255,255,255,0.28)'; }}
@@ -219,8 +271,7 @@ function RoleButton({ label, icon, onClick }: { label: string; icon: React.React
     >
       <Corner />
       {icon}
-      <span className="text-[0.65rem] font-semibold uppercase tracking-widest"
-        style={{ fontFamily: 'monospace' }}>
+      <span className="text-[0.65rem] font-semibold uppercase tracking-widest" style={{ fontFamily: 'monospace' }}>
         {label}
       </span>
     </button>
