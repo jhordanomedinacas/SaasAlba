@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import logoAlba from '../../assets/logo-alba.png';
+import { useAuth } from '../context/AuthContext';
+import type { UserRole } from '../context/AuthContext';
 
-type Role = 'entrenador' | 'asesor' | null;
+type Role = UserRole | null;
 
 export default function Login() {
   const navigate  = useNavigate();
+  const { setRole: setAuthRole } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef   = useRef<number>(0);
   const videoRef  = useRef<HTMLVideoElement>(null);
@@ -90,7 +93,11 @@ export default function Login() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    navigate('/inicio');
+    if (!role) return;
+    setAuthRole(role);
+    if (role === 'admin')       navigate('/admin');
+    else if (role === 'asesor') navigate('/inicio-asesor');
+    else                        navigate('/inicio');
   };
 
   return (
@@ -171,6 +178,15 @@ export default function Login() {
             </p>
             <div className="flex gap-3 w-full">
               <RoleButton
+                label="Admin"
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                  </svg>
+                }
+                onClick={() => setRole('admin')}
+              />
+              <RoleButton
                 label="Entrenador"
                 icon={
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6">
@@ -206,7 +222,7 @@ export default function Login() {
             <div className="flex items-center justify-between">
               <span className="text-[0.60rem] uppercase tracking-widest text-white/80"
                 style={{ fontFamily: 'monospace' }}>
-                {role === 'entrenador' ? 'Entrenador' : 'Asesor'}
+                {role === 'admin' ? 'Admin' : role === 'entrenador' ? 'Entrenador' : 'Asesor'}
               </span>
               <button
                 type="button"

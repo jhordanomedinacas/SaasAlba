@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
-import { Home, MessageSquare, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, MessageSquare, Settings, LogOut, ChevronLeft, ChevronRight, ShieldCheck, Users, UserCircle2 } from 'lucide-react';
 import logoAlba from '../../assets/logo-alba.png';
 import { ProfileModal } from './ProfileModal';
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -75,9 +77,36 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
         <nav className="flex-1 p-4">
           <div className="space-y-2">
-            <SidebarNavLink to="/inicio" icon={<Home size={20} />} label="Inicio" isOpen={isOpen} />
-            <SidebarNavLink to="/historial-chat" icon={<MessageSquare size={20} />} label="Chats" isOpen={isOpen} />
-            <SidebarNavLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" isOpen={isOpen} />
+            {role === 'admin' && (
+              <>
+                <SidebarNavLink to="/admin" icon={<ShieldCheck size={20} />} label="Panel Admin" isOpen={isOpen} />
+                <SidebarNavLink to="/admin/usuarios" icon={<Users size={20} />} label="Usuarios" isOpen={isOpen} />
+                <SidebarNavLink to="/admin/chats" icon={<MessageSquare size={20} />} label="Chats" isOpen={isOpen} />
+                <SidebarNavLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" isOpen={isOpen} />
+              </>
+            )}
+            {role === 'entrenador' && (
+              <>
+                <SidebarNavLink to="/inicio" icon={<Home size={20} />} label="Inicio" isOpen={isOpen} />
+                <SidebarNavLink to="/historial-chat" icon={<MessageSquare size={20} />} label="Chats" isOpen={isOpen} />
+                <SidebarNavLink to="/perfiles-cliente" icon={<UserCircle2 size={20} />} label="Perfiles" isOpen={isOpen} />
+                <SidebarNavLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" isOpen={isOpen} />
+              </>
+            )}
+            {role === 'asesor' && (
+              <>
+                <SidebarNavLink to="/inicio-asesor" icon={<Home size={20} />} label="Mi Dashboard" isOpen={isOpen} />
+                <SidebarNavLink to="/historial-chat" icon={<MessageSquare size={20} />} label="Mis Sesiones" isOpen={isOpen} />
+                <SidebarNavLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" isOpen={isOpen} />
+              </>
+            )}
+            {!role && (
+              <>
+                <SidebarNavLink to="/inicio" icon={<Home size={20} />} label="Inicio" isOpen={isOpen} />
+                <SidebarNavLink to="/historial-chat" icon={<MessageSquare size={20} />} label="Chats" isOpen={isOpen} />
+                <SidebarNavLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" isOpen={isOpen} />
+              </>
+            )}
           </div>
         </nav>
 

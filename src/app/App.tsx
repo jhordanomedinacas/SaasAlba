@@ -4,8 +4,15 @@ import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { AccessibilityWidget } from './components/AccessibilityWidget';
 import { SessionsProvider } from './context/SessionsContext';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import Login from './pages/Login';
-import Inicio from './pages/Inicio';
+import Inicio from './pages/entrenador/Inicio';
+import PerfilesCliente from './pages/entrenador/PerfilesCliente';
+import InicioAsesor from './pages/asesor/InicioAsesor';
+import InicioAdmin from './pages/admin/InicioAdmin';
+import GestionUsuarios from './pages/admin/GestionUsuarios';
+import ChatsAdmin from './pages/admin/ChatsAdmin';
 import HistoryChats from './pages/HistoryChats';
 import PracticaChat from './pages/PracticaChat';
 import Configuracion from './pages/Configuracion';
@@ -32,14 +39,54 @@ function AppLayout() {
         <div className="flex-1 flex overflow-hidden">
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="/inicio" element={<Inicio />} />
-            <Route path="/historial-chat" element={<HistoryChats />} />
-            <Route path="/historial-chat/:id" element={<PracticaChat />} />
-            <Route path="/configuracion" element={<Configuracion />} />
+            <Route path="/inicio" element={
+              <ProtectedRoute allowed={['entrenador']}>
+                <Inicio />
+              </ProtectedRoute>
+            } />
+            <Route path="/inicio-asesor" element={
+              <ProtectedRoute allowed={['asesor']}>
+                <InicioAsesor />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute allowed={['admin']}>
+                <InicioAdmin />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/usuarios" element={
+              <ProtectedRoute allowed={['admin']}>
+                <GestionUsuarios />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/chats" element={
+              <ProtectedRoute allowed={['admin']}>
+                <ChatsAdmin />
+              </ProtectedRoute>
+            } />
+            <Route path="/perfiles-cliente" element={
+              <ProtectedRoute allowed={['entrenador']}>
+                <PerfilesCliente />
+              </ProtectedRoute>
+            } />
+            <Route path="/historial-chat" element={
+              <ProtectedRoute allowed={['entrenador', 'asesor']}>
+                <HistoryChats />
+              </ProtectedRoute>
+            } />
+            <Route path="/historial-chat/:id" element={
+              <ProtectedRoute allowed={['entrenador', 'asesor']}>
+                <PracticaChat />
+              </ProtectedRoute>
+            } />
+            <Route path="/configuracion" element={
+              <ProtectedRoute allowed={['admin', 'entrenador', 'asesor']}>
+                <Configuracion />
+              </ProtectedRoute>
+            } />
           </Routes>
         </div>
       </div>
-
     </div>
   );
 }
@@ -47,13 +94,15 @@ function AppLayout() {
 export default function App() {
   return (
     <HashRouter>
-      <SessionsProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/*" element={<AppLayout />} />
-        </Routes>
-        <AccessibilityWidget />
-      </SessionsProvider>
+      <AuthProvider>
+        <SessionsProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/*" element={<AppLayout />} />
+          </Routes>
+          <AccessibilityWidget />
+        </SessionsProvider>
+      </AuthProvider>
     </HashRouter>
   );
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { TrendingUp, Users, BarChart2, CheckSquare, ArrowRight, Search, X, MessageSquare, Star, ShieldCheck, Clock } from 'lucide-react';
 import { Liveline } from 'liveline';
 import type { LivelinePoint } from 'liveline';
-import NewSessionModal from '../components/NewSessionModal';
+import NewSessionModal from '../../components/NewSessionModal';
 
 type DifficultyLevel = 'alto' | 'medio' | 'bajo';
 type SessionStatus   = 'completado' | 'incompleto' | 'en curso';
