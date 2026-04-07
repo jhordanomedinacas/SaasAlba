@@ -252,14 +252,35 @@ function InteractiveMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const riderMarkerRef = useRef<any>(null);
-  // Almacena los puntos reales de la ruta OSRM para mover al rider sobre ellos
+  const userMarkerRef = useRef<any>(null);
+  const routeControlRef = useRef<any>(null);
   const routeCoordsRef = useRef<[number, number][]>([]);
-  // Ref de progreso para accederlo dentro de callbacks asíncronos sin stale closure
   const progressRef = useRef(progress);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+  // Solicitar geolocalización del usuario (cliente)
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+      },
+      () => {
+        // Si falla, usar CLIENT_COORDS como fallback
+        setUserLocation(clientCoords);
+      }
+    );
+  }, []);
 
   // Mantiene progressRef sincronizado
   useEffect(() => { progressRef.current = progress; }, [progress]);
+
+  // Redibujar rutas si cambia la ubicación del usuario GPS
+  useEffect(() => {
+    if (!mapInstanceRef.current || !userLocation) return;
+    // Aquí se puede agregar lógica para redibujar rutas si es necesario
+  }, [userLocation]);
 
   // Mueve al rider a lo largo de la ruta real según el progreso de la simulación
   useEffect(() => {
@@ -337,13 +358,14 @@ function InteractiveMap({
       const Lf = (window as any).L;
       // Orden cancelada: rider fijo en el local (no va al cliente)
       const initialRider = cancelledOrder ? LOCAL_COORDS : (liveRiderPos ?? LOCAL_COORDS);
+      const effectiveClientCoords = userLocation || clientCoords;
 
       const centerLat = cancelledOrder
         ? (RIDER_START[0] + localCoords[0]) / 2
-        : (localCoords[0] + clientCoords[0]) / 2;
+        : (localCoords[0] + effectiveClientCoords[0]) / 2;
       const centerLng = cancelledOrder
         ? (RIDER_START[1] + localCoords[1]) / 2
-        : (localCoords[1] + clientCoords[1]) / 2;
+        : (localCoords[1] + effectiveClientCoords[1]) / 2;
 
       const map = Lf.map(container, {
         center: [centerLat, centerLng],
@@ -386,8 +408,9 @@ function InteractiveMap({
         .bindPopup(riderPopupText, popupOpts);
       riderMarkerRef.current = riderMarker;
 
-      let finalClientCoords = clientCoords;
-      if (!cancelledOrder) {
+      let finalClientCoords = userLocation || clientCoords;
+      // Si no tenemos GPS, intentar resolver con Nominatim, pero priorizar GPS
+      if (!userLocation && !cancelledOrder) {
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(deliveryAddress + ', Lima, Perú')}&format=json&limit=1`,
@@ -409,9 +432,22 @@ function InteractiveMap({
         .bindPopup(
           cancelledOrder
             ? `<b style="font-size:.88rem;color:#ef4444">Entrega cancelada</b><br><span style="font-size:.78rem;color:#6b7280">${clienteName} — ${deliveryAddress.split(',')[0]}</span>`
-            : `<b style="font-size:.88rem">${clienteName}</b><br><span style="font-size:.78rem;color:#6b7280">${deliveryAddress.split(',').slice(0,2).join(',')}</span>`,
+            : `<b style="font-size:.88rem">${clienteName}</b><br><span style="font-size:.78rem;color:#6b7280">Ubicación GPS actual</span>`,
           popupOpts
         );
+
+      // Marcador de ubicación GPS del usuario actual (pequeño punto)
+      if (userLocation) {
+        const userIcon = Lf.divIcon({
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid rgba(255,255,255,0.35);box-shadow:0 0 0 7px rgba(255,255,255,0.1),0 2px 10px rgba(0,0,0,0.5);"></div>`,
+          className: '',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        });
+        userMarkerRef.current = Lf.marker(userLocation, { icon: userIcon })
+          .addTo(map)
+          .bindPopup('<span style="font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">Tu ubicación (GPS)</span>', popupOpts);
+      }
 
       // ── Helpers de dibujo ─────────────────────────────────────────
       const drawRoute = (coords: [number,number][], color: string, w = 5) => {
@@ -428,8 +464,7 @@ function InteractiveMap({
         }
       };
 
-      // ── Routing via L.Routing.control (igual que postventa.html que funciona) ──
-      // LRM usa OSRM internamente, maneja CORS correctamente desde el browser
+      // ── Dibujar rutas directas (sin OSRM, todo local) ──────────────
       const routeSegment = (
         from: [number,number],
         to:   [number,number],
@@ -437,67 +472,9 @@ function InteractiveMap({
         w = 5
       ): Promise<[number,number][]> =>
         new Promise((resolve) => {
-          const Routing = (Lf as any).Routing;
-          if (!Routing) {
-            // LRM no disponible: línea recta provisional
-            Lf.polyline([from, to], { color, weight: w, opacity: 0.5, dashArray: '6,4' }).addTo(map);
-            resolve([from, to]);
-            return;
-          }
-
-          const ctrl = Routing.control({
-            waypoints: [
-              Lf.latLng(from[0], from[1]),
-              Lf.latLng(to[0],   to[1]),
-            ],
-            routeWhileDragging: false,
-            addWaypoints:       false,
-            show:               false,
-            fitSelectedRoutes:  false,
-            createMarker:       () => null,
-            lineOptions: {
-              styles: [],                    // desactivamos el estilo default de LRM
-              extendToWaypoints:      false,
-              missingRouteTolerance:  0,
-            },
-          });
-
-          let resolved = false;
-
-          ctrl.on('routesfound', (e: any) => {
-            if (resolved) return;
-            resolved = true;
-            try { (map as any).removeControl(ctrl); } catch (_) {}
-            const pts: [number,number][] = e.routes[0].coordinates.map(
-              (p: any) => [p.lat, p.lng] as [number,number]
-            );
-            if (mapInstanceRef.current) drawRoute(pts, color, w);
-            resolve(pts);
-          });
-
-          ctrl.on('routingerror', () => {
-            if (resolved) return;
-            resolved = true;
-            try { (map as any).removeControl(ctrl); } catch (_) {}
-            // Fallback visual: línea recta punteada
-            if (mapInstanceRef.current) {
-              Lf.polyline([from, to], { color, weight: w, opacity: 0.6, dashArray: '6,4' }).addTo(map);
-            }
-            resolve([from, to]);
-          });
-
-          // Timeout 10s
-          setTimeout(() => {
-            if (resolved) return;
-            resolved = true;
-            try { (map as any).removeControl(ctrl); } catch (_) {}
-            if (mapInstanceRef.current) {
-              Lf.polyline([from, to], { color, weight: w, opacity: 0.6, dashArray: '6,4' }).addTo(map);
-            }
-            resolve([from, to]);
-          }, 10000);
-
-          ctrl.addTo(map);
+          // Línea recta simple (más confiable que OSRM)
+          drawRoute([from, to], color, w);
+          resolve([from, to]);
         });
 
       // ── Dibujar rutas ───────────────────────────────────────────────
@@ -512,7 +489,6 @@ function InteractiveMap({
         });
       } else {
         map.fitBounds(Lf.latLngBounds([RIDER_START, localCoords, finalClientCoords]).pad(0.2));
-        // Ambos segmentos en secuencia para que LRM no colisione
         routeSegment(RIDER_START, localCoords, '#e11d48', 5).then(seg1 => {
           if (!mapInstanceRef.current) return;
           routeSegment(localCoords, finalClientCoords, '#3b82f6', 5).then(seg2 => {

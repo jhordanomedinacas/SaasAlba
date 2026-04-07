@@ -195,8 +195,8 @@ export default function Inicio() {
       {/* Content */}
       <div className="flex-1 p-4 md:p-6 space-y-5">
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-stretch" style={{ gridAutoRows: '1fr' }}>
+        {/* KPI Cards — gridAutoRows:'1fr' fuerza igual altura en todas las celdas */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" style={{ gridAutoRows: '1fr' }}>
           {stats.map((stat) => <KpiCard key={stat.label} {...stat} />)}
           <AprobacionCard />
         </div>
@@ -367,7 +367,7 @@ function AprobacionCard() {
   }, []);
 
   return (
-    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex h-full min-h-full self-stretch flex-col gap-3">
+    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between">
         <p className="text-xs text-slate-400 mt-1">Tasa de Aprobación</p>
         <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
@@ -401,7 +401,7 @@ function AprobacionCard() {
           </div>
         </div>
       </div>
-      <div>
+      <div className="mt-auto">
         <p className="text-xs text-slate-500 font-medium flex items-center gap-1 mb-1">
           <TrendingUp size={11} className="text-slate-400" />+2% este mes
         </p>
@@ -430,7 +430,7 @@ interface KpiCardProps {
 function KpiCard({ numeric, value, label, trend, icon: Icon, bar, sparkline, chartType = 'sparkline' }: KpiCardProps) {
   const [count,      setCount]      = useState(0);
   const [barWidth,   setBarWidth]   = useState(0);
-  const [animPct,    setAnimPct]    = useState(0); // 0→1 para barras y área
+  const [animPct,    setAnimPct]    = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -463,7 +463,7 @@ function KpiCard({ numeric, value, label, trend, icon: Icon, bar, sparkline, cha
     return `${x},${y}`;
   }).join(' ');
 
-  /* ── Bar chart — viewBox fijo para que los textos no se distorsionen ── */
+  /* ── Bar chart ── */
   const BW = 180, BH = 48, LABEL_H = 14;
   const bMax   = Math.max(...sparkline);
   const slotW  = BW / sparkline.length;
@@ -481,7 +481,7 @@ function KpiCard({ numeric, value, label, trend, icon: Icon, bar, sparkline, cha
   const areaPath  = `${linePath} L${AW},${AH} L0,${AH} Z`;
 
   return (
-    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex h-full min-h-full self-stretch flex-col gap-3">
+    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col gap-3">
 
       {/* Top row */}
       <div className="flex items-start justify-between">
@@ -530,16 +530,12 @@ function KpiCard({ numeric, value, label, trend, icon: Icon, bar, sparkline, cha
               <rect x="0" y="0" width={AW * animPct} height={AH + 4} />
             </clipPath>
           </defs>
-          {/* Área rellena */}
           <path d={areaPath} fill={`url(#areaGrad-${label})`} clipPath={`url(#clip-${label})`} />
-          {/* Línea base gris */}
           <polyline points={areaPts.map(([x,y]) => `${x},${y}`).join(' ')}
             fill="none" stroke="#e2e8f0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          {/* Línea animada */}
           <polyline points={areaPts.map(([x,y]) => `${x},${y}`).join(' ')}
             fill="none" stroke="#0F2C32" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
             clipPath={`url(#clip-${label})`} />
-          {/* Puntos */}
           {areaPts.map(([x, y], i) => (
             <circle key={i} cx={x} cy={y} r="2"
               fill={i === sparkline.length - 1 ? '#0F2C32' : '#94a3b8'}
@@ -567,8 +563,8 @@ function KpiCard({ numeric, value, label, trend, icon: Icon, bar, sparkline, cha
         </svg>
       )}
 
-      {/* Barra de progreso */}
-      <div>
+      {/* Barra de progreso — mt-auto la empuja siempre al fondo */}
+      <div className="mt-auto">
         <div className="flex justify-between items-center mb-1">
           <p className="text-xs text-slate-500 font-medium flex items-center gap-1">
             <TrendingUp size={11} className="text-slate-400" />{trend}

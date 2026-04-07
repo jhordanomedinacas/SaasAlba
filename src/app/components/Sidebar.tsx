@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
-import { Home, MessageSquare, BookOpen, TrendingUp, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, MessageSquare, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import logoAlba from '../../assets/logo-alba.png';
 
 interface SidebarProps {
@@ -73,8 +73,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           <div className="space-y-2">
             <SidebarNavLink to="/inicio" icon={<Home size={20} />} label="Inicio" isOpen={isOpen} />
             <SidebarNavLink to="/historial-chat" icon={<MessageSquare size={20} />} label="Chats" isOpen={isOpen} />
-            <SidebarNavLink to="/mis-cursos" icon={<BookOpen size={20} />} label="Mis Cursos" isOpen={isOpen} />
-            <SidebarNavLink to="/certificaciones" icon={<TrendingUp size={20} />} label="Certificaciones" isOpen={isOpen} />
             <SidebarNavLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" isOpen={isOpen} />
           </div>
         </nav>
