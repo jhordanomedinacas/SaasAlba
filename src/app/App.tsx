@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Inicio from './pages/Inicio';
 import HistoryChats from './pages/HistoryChats';
 import PracticaChat from './pages/PracticaChat';
+import Configuracion from './pages/Configuracion';
 
 function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
@@ -34,6 +35,7 @@ function AppLayout() {
             <Route path="/inicio" element={<Inicio />} />
             <Route path="/historial-chat" element={<HistoryChats />} />
             <Route path="/historial-chat/:id" element={<PracticaChat />} />
+            <Route path="/configuracion" element={<Configuracion />} />
           </Routes>
         </div>
       </div>

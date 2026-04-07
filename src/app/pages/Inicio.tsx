@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { TrendingUp, Users, BarChart2, CheckSquare, ArrowRight, Search, X } from 'lucide-react';
+import { TrendingUp, Users, BarChart2, CheckSquare, ArrowRight, Search, X, MessageSquare, Star, ShieldCheck, Clock } from 'lucide-react';
+import { Liveline } from 'liveline';
+import type { LivelinePoint } from 'liveline';
 import NewSessionModal from '../components/NewSessionModal';
 
 type DifficultyLevel = 'alto' | 'medio' | 'bajo';
@@ -69,12 +71,130 @@ const stats = [
     bar: 68, sparkline: [18, 20, 22, 24, 26, 28, 30, 32, 34],
     chartType: 'area' as const,
   },
+];
+
+const chatKpis = [
   {
-    numeric: 78, value: '78%', label: 'Score Promedio', trend: '+3% este mes', icon: TrendingUp,
-    bar: 78, sparkline: [60, 65, 63, 70, 68, 72, 74, 76, 78],
-    chartType: 'sparkline' as const,
+    label: 'AHT',
+    fullLabel: 'Tiempo Promedio de Atención',
+    description: 'Average Handle Time: tiempo total desde que inicia hasta que se cierra la conversación con el cliente.',
+    value: '4:32',
+    unit: 'min',
+    trend: '-0:18 vs mes ant.',
+    trendUp: false,
+    icon: Clock,
+    bar: 64,
+    sparkline: [310, 295, 308, 290, 285, 278, 275, 272, 272],
+  },
+  {
+    label: 'CSAT',
+    fullLabel: 'Satisfacción del Cliente',
+    description: 'Customer Satisfaction Score: calificación del 1 al 5 que da el cliente al finalizar la atención.',
+    value: '4.4',
+    unit: '/5',
+    trend: '+0.3 este mes',
+    trendUp: true,
+    icon: Star,
+    bar: 88,
+    sparkline: [3.6, 3.8, 3.7, 3.9, 4.0, 4.1, 4.2, 4.3, 4.4],
+  },
+  {
+    label: 'TMR',
+    fullLabel: 'Tiempo Medio de Respuesta',
+    description: 'Tiempo Medio de Respuesta: tiempo promedio que tarda el asesor en responder cada mensaje del cliente durante el chat.',
+    value: '1:12',
+    unit: 'min',
+    trend: '-0:08 vs mes ant.',
+    trendUp: false,
+    icon: ShieldCheck,
+    bar: 60,
+    sparkline: [95, 90, 88, 85, 82, 80, 78, 75, 72],
+  },
+  {
+    label: 'WUT',
+    fullLabel: 'Tiempo de Cierre',
+    description: 'Wrap Up Time: tiempo que tarda el asesor en completar el registro y cierre tras finalizar el chat.',
+    value: '45',
+    unit: 'seg',
+    trend: '-5 seg vs mes ant.',
+    trendUp: false,
+    icon: MessageSquare,
+    bar: 55,
+    sparkline: [72, 68, 65, 62, 60, 58, 55, 50, 45],
   },
 ];
+
+/* ─────────────────────────────────────────────────────
+   REALTIME PANEL
+───────────────────────────────────────────────────── */
+function RealtimePanel() {
+  const [data,  setData]  = useState<LivelinePoint[]>([]);
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    const now  = () => Date.now() / 1000;
+    let agents = 28;
+
+    /* Historial inicial: últimos 120 segundos */
+    const history: LivelinePoint[] = Array.from({ length: 30 }, (_, i) => {
+      const fluctuation = Math.floor(Math.random() * 8) - 4;
+      agents = Math.max(10, Math.min(40, agents + fluctuation));
+      return { time: now() - (30 - i) * 4, value: agents };
+    });
+
+    setData(history);
+    setValue(agents);
+
+    /* Nuevo punto cada 3 segundos */
+    const interval = setInterval(() => {
+      const fluctuation = Math.floor(Math.random() * 6) - 3;
+      agents = Math.max(10, Math.min(40, agents + fluctuation));
+      const point: LivelinePoint = { time: now(), value: agents };
+      setData(prev => [...prev.slice(-60), point]);
+      setValue(agents);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg p-4 md:p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-[#0F2C32]">Actividad en tiempo real</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Agentes activos en la plataforma</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs text-slate-400">En vivo</span>
+        </div>
+      </div>
+      <div style={{ height: 200 }}>
+        <Liveline
+          data={data}
+          value={value}
+          color="#0F2C32"
+          theme="light"
+          grid
+          fill
+          pulse
+          scrub
+          exaggerate
+          badge
+          badgeVariant="minimal"
+          window={120}
+          formatValue={v => `${Math.round(v)} agentes`}
+          windows={[
+            { label: '1m',  secs: 60  },
+            { label: '2m',  secs: 120 },
+            { label: '5m',  secs: 300 },
+          ]}
+          windowStyle="rounded"
+        />
+      </div>
+    </div>
+  );
+}
 
 /* ─────────────────────────────────────────────────────
    INICIO
@@ -196,10 +316,24 @@ export default function Inicio() {
       <div className="flex-1 p-4 md:p-6 space-y-5">
 
         {/* KPI Cards — gridAutoRows:'1fr' fuerza igual altura en todas las celdas */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" style={{ gridAutoRows: '1fr' }}>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4" style={{ gridAutoRows: '1fr' }}>
           {stats.map((stat) => <KpiCard key={stat.label} {...stat} />)}
           <AprobacionCard />
         </div>
+
+        {/* Chat KPIs */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquare size={13} className="text-slate-400" />
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">KPIs de atención por chat</p>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {chatKpis.map(kpi => <ChatKpiCard key={kpi.label} {...kpi} stars={kpi.label === 'CSAT'} />)}
+          </div>
+        </div>
+
+        {/* Panel tiempo real */}
+        <RealtimePanel />
 
         {/* Middle panels */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -407,6 +541,106 @@ function AprobacionCard() {
         </p>
         <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
           <div className="h-full bg-[#0F2C32] rounded-full" style={{ width: `${progress}%`, transition: 'width 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────
+   CHAT KPI CARD
+───────────────────────────────────────────────────── */
+interface ChatKpiCardProps {
+  label: string;
+  fullLabel: string;
+  description: string;
+  value: string;
+  unit: string;
+  trend: string;
+  trendUp: boolean;
+  icon: React.ElementType;
+  bar: number;
+  sparkline: number[];
+  stars?: boolean;
+}
+
+function ChatKpiCard({ label, fullLabel, description, value, unit, trend, trendUp, icon: Icon, bar, sparkline, stars }: ChatKpiCardProps) {
+  const [barWidth, setBarWidth] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      setTimeout(() => setBarWidth(bar), 200);
+    }, { threshold: 0.3 });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [bar]);
+
+  const SW = 80, SH = 24;
+  const sMin = Math.min(...sparkline), sMax = Math.max(...sparkline);
+  const pts = sparkline.map((v, i) => {
+    const x = (i / (sparkline.length - 1)) * SW;
+    const y = SH - ((v - sMin) / (sMax - sMin || 1)) * SH;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div ref={ref} className="bg-white border border-slate-200 rounded-lg p-4 md:p-5 flex flex-col gap-3">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xl md:text-2xl font-bold text-[#0F2C32] tabular-nums">
+            {value}<span className="text-sm font-medium text-slate-400 ml-1">{unit}</span>
+          </p>
+          {stars && (
+            <div className="flex items-center gap-0.5 mt-1">
+              {[1,2,3,4,5].map(i => {
+                const filled = parseFloat(value) >= i;
+                const partial = !filled && parseFloat(value) > i - 1;
+                return (
+                  <span key={i} className={`text-xs ${filled || partial ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-xs text-slate-400 mt-0.5">{fullLabel}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="relative group">
+            <div className="p-1.5 bg-slate-50 rounded-lg border border-slate-100 cursor-default">
+              <Icon size={13} className="text-slate-400" />
+            </div>
+            {/* Tooltip */}
+            <div className="absolute right-0 top-8 z-50 w-52 p-2.5 bg-[#0F2C32] text-white text-xs rounded-lg shadow-lg
+              opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200">
+              <p className="font-semibold mb-1">{label}</p>
+              <p className="text-white/70 leading-relaxed">{description}</p>
+              <div className="absolute -top-1 right-2.5 w-2 h-2 bg-[#0F2C32] rotate-45" />
+            </div>
+          </div>
+          <span className="text-[0.60rem] font-bold tracking-widest text-slate-300 uppercase">{label}</span>
+        </div>
+      </div>
+
+      <svg width={SW} height={SH} viewBox={`0 0 ${SW} ${SH}`} className="overflow-visible">
+        <polyline points={pts} fill="none" stroke="#e2e8f0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={pts} fill="none" stroke="#0F2C32" strokeWidth="1.5"
+          strokeLinecap="round" strokeLinejoin="round"
+          strokeDasharray="200" strokeDashoffset={barWidth > 0 ? 0 : 200}
+          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }}
+        />
+      </svg>
+
+      <div className="mt-auto">
+        <p className={`text-xs font-medium flex items-center gap-1 mb-1 ${trendUp ? 'text-slate-500' : 'text-slate-500'}`}>
+          <TrendingUp size={11} className="text-slate-400" />
+          {trend}
+        </p>
+        <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-full bg-[#0F2C32] rounded-full"
+            style={{ width: `${barWidth}%`, transition: 'width 1.2s cubic-bezier(0.4,0,0.2,1)' }}
+          />
         </div>
       </div>
     </div>

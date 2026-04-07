@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import { Home, MessageSquare, Settings, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import logoAlba from '../../assets/logo-alba.png';
+import { ProfileModal } from './ProfileModal';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -11,12 +12,15 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   return (
     <>
       {isOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={onToggle} />
       )}
+
+      {showProfileModal && <ProfileModal onClose={() => setShowProfileModal(false)} />}
 
       {/* Modal cerrar sesión */}
       {showLogoutModal && (
@@ -80,15 +84,18 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         <div className="p-4 border-t border-white/10">
           {isOpen ? (
             <>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <button
+                onClick={() => setShowProfileModal(true)}
+                className="flex items-center gap-3 mb-3 w-full hover:opacity-80 transition-opacity"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
                   <span className="text-sm font-semibold">JD</span>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 text-left">
                   <p className="text-sm font-medium">Juan Pérez</p>
                   <p className="text-xs text-white/60">Asesor en Entrenamiento</p>
                 </div>
-              </div>
+              </button>
               <button
                 onClick={() => setShowLogoutModal(true)}
                 className="flex items-center gap-2 text-sm text-white/80 hover:text-white w-full"
@@ -99,9 +106,13 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <button
+                onClick={() => setShowProfileModal(true)}
+                className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:opacity-80 transition-opacity"
+                title="Ver perfil"
+              >
                 <span className="text-sm font-semibold">JD</span>
-              </div>
+              </button>
               <button
                 onClick={() => setShowLogoutModal(true)}
                 className="text-white/80 hover:text-white"
