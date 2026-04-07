@@ -6,6 +6,7 @@ import {
   AlertCircle, Gift, Truck, ArrowRight, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import type { OrderInfo } from '../hooks/useCriticalBot';
 
 // ---- Tipos ----
 type TabId = 'ticket' | 'ordenes' | 'cliente' | 'actividad';
@@ -597,7 +598,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 // ---- TAB: Ticket ----
-function TabTicket({ onMapExpand, isCancelled }: { onMapExpand: () => void; isCancelled: boolean }) {
+function TabTicket({ onMapExpand, isCancelled, info }: { onMapExpand: () => void; isCancelled: boolean; info: OrderInfo }) {
   return (
     <div className="space-y-3 p-4">
       {/* Estado de la orden */}
@@ -676,7 +677,7 @@ function TabTicket({ onMapExpand, isCancelled }: { onMapExpand: () => void; isCa
         </div>
         <div className="px-4 py-3 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-800">PhoneCorp San Isidro</p>
+            <p className="text-sm font-medium text-gray-800">{info.partnerName}</p>
             {isCancelled ? (
               <p className="text-xs text-red-500 mt-0.5 font-medium">Rider retornó al local — entrega cancelada</p>
             ) : (
@@ -896,7 +897,7 @@ function ModalRechazarOrden({ onClose }: { onClose: () => void }) {
 }
 
 // ---- TAB: Órdenes ----
-function TabOrdenes({ isCancelled }: { isCancelled: boolean }) {
+function TabOrdenes({ isCancelled, info }: { isCancelled: boolean; info: OrderInfo }) {
   const [deliveryExpanded, setDeliveryExpanded] = useState(true);
   const [pickupExpanded, setPickupExpanded] = useState(false);
   const [showCambiarDireccion, setShowCambiarDireccion] = useState(false);
@@ -959,9 +960,8 @@ function TabOrdenes({ isCancelled }: { isCancelled: boolean }) {
           <div>
             <p className="text-xs text-gray-400 mb-0.5">Orden</p>
             <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold text-gray-900">1832150046</span>
-              <CopyButton text="1832150046" />
-              <span className="text-sm text-gray-500">#6479</span>
+              <span className="text-base font-bold text-gray-900">{info.orderNumber}</span>
+              <CopyButton text={info.orderNumber} />
             </div>
           </div>
           <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
@@ -976,7 +976,7 @@ function TabOrdenes({ isCancelled }: { isCancelled: boolean }) {
           {/* Monto */}
           <div>
             <p className="text-xs text-gray-400 mb-0.5">Monto de la orden</p>
-            <p className="text-xs font-semibold text-gray-800">USD 10.67</p>
+            <p className="text-xs font-semibold text-gray-800">{info.orderAmount}</p>
           </div>
           {/* Chat Rider - Cliente */}
           <div>
@@ -1030,7 +1030,7 @@ function TabOrdenes({ isCancelled }: { isCancelled: boolean }) {
           {/* PIN de prueba */}
           <div>
             <p className="text-xs text-gray-400 mb-0.5">PIN de prueba de entrega</p>
-            <p className="text-xs text-gray-500">No requerido</p>
+            <p className="text-xs font-semibold text-gray-800">{info.deliveryPin}</p>
           </div>
           {/* Tags */}
           <div>
@@ -1040,7 +1040,7 @@ function TabOrdenes({ isCancelled }: { isCancelled: boolean }) {
           {/* Nombre del partner */}
           <div>
             <p className="text-xs text-gray-400 mb-0.5">Nombre del partner</p>
-            <p className="text-xs font-medium text-gray-800">PhoneCorp – San Isidro, Lima</p>
+            <p className="text-xs font-medium text-gray-800">{info.partnerName} – Lima</p>
           </div>
           {/* Vertical */}
           <div>
@@ -1242,17 +1242,18 @@ function TabOrdenes({ isCancelled }: { isCancelled: boolean }) {
 }
 
 // ---- TAB: Cliente ----
-function TabCliente() {
+function TabCliente({ info }: { info: OrderInfo }) {
+  const initials = info.customerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   return (
     <div className="space-y-3 p-4">
       {/* Perfil cliente */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-4 py-4 flex items-center gap-3 border-b border-gray-50">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-            VS
+            {initials}
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">Verónica Sosa</p>
+            <p className="text-sm font-semibold text-gray-900">{info.customerName}</p>
             <p className="text-xs text-gray-500">Cliente desde Mar 2023</p>
           </div>
           <div className="ml-auto">
@@ -1261,8 +1262,8 @@ function TabCliente() {
         </div>
         <div className="divide-y divide-gray-50">
           {[
-            { label: 'Teléfono', value: '+51 987 654 321', copy: true },
-            { label: 'Email', value: 'v.sosa@email.com', copy: true },
+            { label: 'Teléfono', value: info.phone, copy: true },
+            { label: 'Email', value: info.email, copy: true },
             { label: 'Ciudad', value: 'Lima, Perú' },
             { label: 'Plataforma', value: 'Android' },
           ].map(item => (
@@ -1497,11 +1498,26 @@ function TabActividad() {
 }
 
 // ---- Panel principal ----
-export function OrderInfoPanel({ orderCancelled = false }: { orderCancelled?: boolean }) {
+export function OrderInfoPanel({ orderCancelled = false, orderInfo }: { orderCancelled?: boolean; orderInfo?: OrderInfo }) {
   const [mapExpanded, setMapExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('ticket');
   const isCancelled = orderCancelled;
   const rider = useRiderSimulation(isCancelled);
+
+  // Fallback para sesiones sin bot (historial antiguo)
+  const info: OrderInfo = orderInfo ?? {
+    customerName: 'Verónica Sosa',
+    orderNumber: '1832150046',
+    partnerName: 'PhoneCorp',
+    vertical: 'Darkstores',
+    deliveryType: 'Platform delivery',
+    paymentMethod: 'Spreedly pa, visa - debit',
+    orderAmount: 'S/ 45.90',
+    tags: ['los'],
+    phone: '+51 987 654 321',
+    email: 'v.sosa@email.com',
+    deliveryPin: '4821',
+  };
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'ticket', label: 'Ticket', icon: <MessageSquare size={13} /> },
@@ -1526,16 +1542,16 @@ export function OrderInfoPanel({ orderCancelled = false }: { orderCancelled?: bo
         <div className="bg-white border-b border-gray-200 px-4 pt-4 pb-0 flex-shrink-0">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              VS
+              {info.customerName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-900">Verónica Sosa</p>
+                <p className="text-sm font-semibold text-gray-900">{info.customerName}</p>
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Phone size={11} className="text-gray-400" />
-                <span className="text-xs text-gray-500">+51 987 654 321</span>
-                <CopyButton text="+51987654321" />
+                <span className="text-xs text-gray-500">{info.phone}</span>
+                <CopyButton text={info.phone} />
               </div>
             </div>
             <div className="flex gap-1.5 flex-shrink-0">
@@ -1580,14 +1596,13 @@ export function OrderInfoPanel({ orderCancelled = false }: { orderCancelled?: bo
             <div>
               <p className="text-xs text-gray-400">Orden</p>
               <div className="flex items-center gap-1">
-                <p className="text-xs font-semibold text-gray-800">1832150046</p>
-                <CopyButton text="1832150046" />
-                <span className="text-xs text-gray-400">#6479</span>
+                <p className="text-xs font-semibold text-gray-800">{info.orderNumber}</p>
+                <CopyButton text={info.orderNumber} />
               </div>
             </div>
             <div>
               <p className="text-xs text-gray-400">Forma de pago</p>
-              <p className="text-xs font-medium text-gray-700">Spreedly pa, visa - debit</p>
+              <p className="text-xs font-medium text-gray-700">{info.paymentMethod}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400">Estado de la orden</p>
@@ -1607,15 +1622,19 @@ export function OrderInfoPanel({ orderCancelled = false }: { orderCancelled?: bo
             </div>
             <div>
               <p className="text-xs text-gray-400">Vertical</p>
-              <p className="text-xs font-medium text-gray-700">Darkstores</p>
+              <p className="text-xs font-medium text-gray-700">{info.vertical}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400">Tipo de delivery</p>
-              <p className="text-xs font-medium text-gray-700">Platform delivery</p>
+              <p className="text-xs font-medium text-gray-700">{info.deliveryType}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400">Tags de la orden</p>
-              <span className="inline-flex items-center px-2 py-0 bg-gray-200 text-gray-600 text-xs rounded-full">los</span>
+              <div className="flex flex-wrap gap-1">
+                {info.tags.map(tag => (
+                  <span key={tag} className="inline-flex items-center px-2 py-0 bg-gray-200 text-gray-600 text-xs rounded-full">{tag}</span>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1643,9 +1662,9 @@ export function OrderInfoPanel({ orderCancelled = false }: { orderCancelled?: bo
 
         {/* Contenido del tab activo */}
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'ticket' && <TabTicket onMapExpand={() => setMapExpanded(true)} isCancelled={isCancelled} />}
-          {activeTab === 'ordenes' && <TabOrdenes isCancelled={isCancelled} />}
-          {activeTab === 'cliente' && <TabCliente />}
+          {activeTab === 'ticket' && <TabTicket onMapExpand={() => setMapExpanded(true)} isCancelled={isCancelled} info={info} />}
+          {activeTab === 'ordenes' && <TabOrdenes isCancelled={isCancelled} info={info} />}
+          {activeTab === 'cliente' && <TabCliente info={info} />}
           {activeTab === 'actividad' && <TabActividad />}
         </div>
 

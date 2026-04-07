@@ -1,6 +1,14 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
+import { COPCEvaluation } from '../hooks/useCOPCRating';
 
 export type SessionStatus = 'completado' | 'en curso' | 'incompleto';
+
+export interface SavedMessage {
+  id: string;
+  sender: 'customer' | 'agent';
+  text: string;
+  time: string;
+}
 
 export interface ChatSession {
   id: string;
@@ -13,12 +21,14 @@ export interface ChatSession {
   score: number | null;
   status: SessionStatus;
   startTime: number;
+  evaluation?: COPCEvaluation;
+  messages?: SavedMessage[];
 }
 
 interface SessionsContextType {
   sessions: ChatSession[];
   addSession: (profileName: string, level: string, motivo: string) => string;
-  completeSession: (id: string) => void;
+  completeSession: (id: string, evaluation?: COPCEvaluation, messages?: SavedMessage[]) => void;
 }
 
 const SessionsContext = createContext<SessionsContextType | null>(null);
@@ -57,11 +67,18 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
     return id;
   };
 
-  const completeSession = (id: string) => {
+  const completeSession = (id: string, evaluation?: COPCEvaluation, messages?: SavedMessage[]) => {
     setSessions(prev => prev.map(s => {
       if (s.id !== id) return s;
       const mins = Math.max(1, Math.round((Date.now() - s.startTime) / 60000));
-      return { ...s, status: 'completado', duration: `${mins} min` };
+      return {
+        ...s,
+        status: 'completado',
+        duration: `${mins} min`,
+        score: evaluation?.totalScore ?? s.score,
+        evaluation,
+        messages,
+      };
     }));
   };
 

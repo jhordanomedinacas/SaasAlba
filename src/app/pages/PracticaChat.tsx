@@ -1,11 +1,16 @@
 import { useParams } from 'react-router';
 import { ChatTraining } from '../components/ChatTraining';
-import { useSessions } from '../context/SessionsContext';
+import { useSessions, SavedMessage } from '../context/SessionsContext';
+import { COPCEvaluation } from '../hooks/useCOPCRating';
 
 export default function PracticaChat() {
   const { id } = useParams<{ id: string }>();
   const { sessions, completeSession } = useSessions();
   const session = sessions.find(s => s.id === id);
+
+  const handleComplete = (evaluation: COPCEvaluation, messages: SavedMessage[]) => {
+    if (id) completeSession(id, evaluation, messages);
+  };
 
   return (
     <ChatTraining
@@ -13,7 +18,9 @@ export default function PracticaChat() {
       level={session?.level ?? 'Intermedio'}
       isCompleted={session?.status === 'completado'}
       orderCancelled={session?.orderCancelled ?? false}
-      onComplete={() => id && completeSession(id)}
+      initialEvaluation={session?.evaluation}
+      initialMessages={session?.messages}
+      onComplete={handleComplete}
     />
   );
 }
